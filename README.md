@@ -122,20 +122,6 @@ Artifacts generated in `results/summary/`:
 - `silhouette_by_algorithm.png`, `ari_by_algorithm.png`, `runtime_sec_by_algorithm.png`: bar charts summarizing quality and runtime.
 - For each PNG above there is a `*.txt` file describing the figure and a `*.json` file with metadata (figure name, metric, axes, grouping keys).
 
-## LaTeX Report
-
-1. Ensure the summary tables (`table_*.tex`) and figure PNGs exist (previous step).
-2. Compile the IEEE article:
-
-   ```bash
-   cd report
-   pdflatex ieee.tex
-   bibtex ieee
-   pdflatex ieee.tex
-   pdflatex ieee.tex
-   ```
-
-3. The resulting PDF should be 8–10 pages and ready for submission on Teams.
 
 ## Reproducibility Notes
 

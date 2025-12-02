@@ -34,4 +34,16 @@ pipeline_*.flag
 .ruff_cache/
 .DS_Store
 
+# Input Files 
+tp2.txt
 
+# Output Files
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.lzma
+*.tar.lz
+*.tar.zst
+*.tar.zstd
+*.tar.zstd
