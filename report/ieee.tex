@@ -1,5 +1,10 @@
 \documentclass[conference]{IEEEtran}
 
+% Pacotes fundamentais para o português e codificação
+\usepackage[utf8]{inputenc} % Permite acentos diretos
+\usepackage[T1]{fontenc}    % Melhor renderização de fontes acentuadas
+\usepackage[brazil]{babel}  % Traduções automáticas (ex: "Resumo", "Tabela")
+
 \usepackage{amsmath, amssymb, amsfonts}
 \usepackage{graphicx}
 \graphicspath{{results/summary/}}
@@ -8,14 +13,14 @@
 \usepackage{algorithm}
 \usepackage{algorithmic}
 
-\title{Approximation Algorithms for the $k$-Center Problem:\\
-An Empirical Analysis of Metric Geometry Impacts}
+\title{Algoritmos de Aproximação para o Problema dos $k$-Centros:\\
+Uma Análise Empírica dos Impactos da Geometria Métrica}
 
-% Update with your actual details
-\author{\IEEEauthorblockN{Author Name}
-\IEEEauthorblockA{Department of Computer Science\\
+% Atualize com seus dados reais
+\author{\IEEEauthorblockN{Pedro Loures Alzamora}
+\IEEEauthorblockA{Departamento de Ciência da Computação\\
 Universidade Federal de Minas Gerais (UFMG)\\
-Belo Horizonte, Brazil\\
+Belo Horizonte, Brasil\\
 Email: email@dcc.ufmg.br}}
 
 \begin{document}
@@ -23,119 +28,121 @@ Email: email@dcc.ufmg.br}}
 \maketitle
 
 \begin{abstract}
-This work presents an empirical evaluation of two 2-approximation algorithms for the metric $k$-center problem—Farthest-First Traversal and Interval Refinement—benchmarked against a K-Means baseline. We investigate the interaction between cluster geometry and distance metrics, specifically Minkowski ($p=1, 2$) and Mahalanobis distances. Experiments were conducted on 46 datasets, comprising both real-world UCI data and synthetic sets designed to test anisotropic and overlapping cluster regimes. Results indicate that while K-Means achieves superior average Silhouette scores (0.566), the interval-refinement $k$-center algorithm offers a competitive alternative (Silhouette 0.547) with significantly lower runtime variance. Furthermore, we demonstrate that the $k$-center objective yields distinct behaviors under Mahalanobis distance, challenging the assumption that covariance-based metrics strictly dominate Euclidean metrics in elliptical cluster recovery.
+Este trabalho apresenta uma avaliação empírica de dois algoritmos de 2-aproximação para o problema métrico dos $k$-centros --- a Travessia do Ponto Mais Distante (\textit{Farthest-First Traversal}) e o Refinamento de Intervalo --- comparados com o algoritmo K-Means como base de referência. Investigamos a interação entre a geometria dos agrupamentos e as métricas de distância, especificamente as distâncias de Minkowski ($p=1, 2$) e Mahalanobis. Os experimentos foram conduzidos em 46 bases de dados, compreendendo dados reais do repositório UCI e conjuntos sintéticos projetados para testar regimes anisotrópicos e de sobreposição. Os resultados indicam que, embora o K-Means obtenha pontuações médias de Silhueta superiores (0,566), o algoritmo de $k$-centros com refinamento de intervalo oferece uma alternativa competitiva (Silhueta 0,547) com variância de tempo de execução significativamente menor. Além disso, demonstramos que a função objetivo do $k$-centros apresenta comportamentos distintos sob a distância de Mahalanobis, desafiando a suposição de que métricas baseadas em covariância dominam estritamente as métricas Euclidianas na recuperação de agrupamentos elípticos. Todos os resultados podem ser encontrado em https://github.com/pedro-loures/nphard
 \end{abstract}
 
-\section{Introduction}
+\section{Introdução}
 
-The $k$-center problem is a fundamental formulation in combinatorial optimization, clustering, and facility location. Given a set of points $P$ and an integer $k$, the objective is to select a set $S \subseteq P$ with $|S| = k$ to minimize the maximum distance from any point in $P$ to its nearest neighbor in $S$. Unlike the $k$-means objective, which minimizes within-cluster variance, $k$-center minimizes the worst-case covering radius.
+O problema dos $k$-centros desempenha um papel fundamental na otimização combinatória, agrupamento de dados (\textit{clustering}) e localização de facilidades. Dado um conjunto de pontos $P$ e um inteiro $k$, o objetivo é selecionar um conjunto $S \subseteq P$ com $|S| = k$ de forma a minimizar a distância máxima de qualquer ponto em $P$ ao seu vizinho mais próximo em $S$. Diferentemente do objetivo do K-Means, que minimiza a variância intra-cluster, o $k$-centros minimiza o raio de cobertura do pior caso.
 
-Since the general $k$-center problem is NP-hard, approximation algorithms are essential for practical applications. This study implements and analyzes two 2-approximation algorithms: the greedy Farthest-First Traversal (Gonzalez's algorithm) and a parametric Interval-Refinement approach. We evaluate how the theoretical approximation guarantees translate into practical performance and analyze the impact of metric selection—specifically Minkowski and Mahalanobis distances—on the clustering quality of datasets with diverse geometries.
+Visto que o problema geral dos $k$-centros é NP-difícil, algoritmos de aproximação são essenciais para aplicações práticas. Este estudo implementa e analisa dois algoritmos de 2-aproximação: a estratégia gulosa de Travessia do Ponto Mais Distante (algoritmo de Gonzalez) e uma abordagem paramétrica de Refinamento de Intervalo. Avaliamos como as garantias teóricas de aproximação se traduzem em desempenho prático e analisamos o impacto da seleção de métricas --- especificamente distâncias de Minkowski e Mahalanobis --- na qualidade do agrupamento de dados com geometrias diversas.
 
-\section{Methods}
+\section{Metodologia}
 
-\subsection{Distance Metrics}
-We consider the Minkowski distance of order $p \ge 1$ between vectors $x, y \in \mathbb{R}^d$:
+\subsection{Métricas de Distância}
+Consideramos a distância de Minkowski de ordem $p \ge 1$ entre vetores $x, y \in \mathbb{R}^d$:
 \begin{equation}
  d_p(x, y) = \|x - y\|_p = \left( \sum_{i=1}^d |x_i - y_i|^p \right)^{1/p}.
 \end{equation}
-This study focuses on Manhattan ($p=1$) and Euclidean ($p=2$) norms. Additionally, to address anisotropic data distributions, we employ the Mahalanobis distance:
+Este estudo foca nas normas de Manhattan ($p=1$) e Euclidiana ($p=2$). Adicionalmente, para abordar distribuições de dados anisotrópicas, empregamos a distância de Mahalanobis:
 \begin{equation}
  d_M(x,y) = \sqrt{(x-y)^\top \Sigma^{-1} (x-y)},
 \end{equation}
-where $\Sigma$ represents the empirical covariance matrix of the dataset. This metric effectively standardizes the data along principal components, accounting for feature correlations.
+onde $\Sigma$ representa a matriz de covariância empírica dos dados. Esta métrica padroniza efetivamente os dados ao longo dos componentes principais, contabilizando correlações entre atributos.
 
-\subsection{2-Approximate $k$-Center Algorithms}
-We examine two constructive heuristics that satisfy the approximation factor $\alpha \le 2$.
+\subsection{Algoritmos de $k$-Centros 2-Aproximados}
+Examinamos duas heurísticas construtivas que satisfazem o fator de aproximação $\alpha \le 2$.
 
-\subsubsection{Farthest-First Traversal}
-This greedy strategy initializes the first center arbitrarily (or randomly) and iteratively selects the point $p \in P$ that maximizes the distance to the current set of centers $S$. The time complexity is $O(nk)$, where $n=|P|$. It provides a computationally inexpensive 2-approximation but is sensitive to outliers.
+\subsubsection{Travessia do Ponto Mais Distante (\textit{Farthest-First})}
+Esta estratégia gulosa inicializa o primeiro centro arbitrariamente e seleciona iterativamente o ponto $p \in P$ que maximiza a distância para o conjunto atual de centros $S$. A complexidade de tempo é $O(nk)$, onde $n=|P|$. Fornece uma 2-aproximação computacionalmente barata, mas é sensível a \textit{outliers}.
 
-\subsubsection{Interval Refinement}
-This algorithm couples a greedy coverage decision procedure with a search over the feasible radius space. Maintaining lower ($L$) and upper ($U$) bounds on the optimal radius $r^*$, the algorithm tests a candidate radius $r$. If the greedy procedure can cover $P$ with $k$ balls of radius $r$, $U$ is updated; otherwise, $L$ is updated. The complexity is $O(nk \cdot \log((U-L)/\epsilon))$, where $\epsilon$ is the convergence tolerance.
+\subsubsection{Refinamento de Intervalo}
+Este algoritmo acopla um procedimento de decisão de cobertura gulosa com uma busca sobre o espaço de raios viáveis. Mantendo limites inferior ($L$) e superior ($U$) para o raio ótimo $r^*$, o algoritmo testa um raio candidato $r$. Se o procedimento guloso consegue cobrir $P$ com $k$ bolas de raio $r$, $U$ é atualizado; caso contrário, $L$ é atualizado. A complexidade é $O(nk \cdot \log((U-L)/\epsilon))$, onde $\epsilon$ é a tolerância de convergência.
 
-\subsection{K-Means Baseline}
-To provide a context for solution quality, we utilize the K-Means++ algorithm (via scikit-learn) as a baseline. While K-Means optimizes a different objective (inertia), it serves as a standard benchmark for cluster coherence (Silhouette) and ground-truth recovery (Adjusted Rand Index - ARI).
+\subsection{K-Means como Base de Comparação}
+Para contextualizar a qualidade da solução, utilizamos o algoritmo K-Means++ (via scikit-learn) como base de referência. Embora o K-Means otimize um objetivo diferente (inércia), ele serve como um padrão para coerência de agrupamento (Silhueta) e recuperação da verdade terrestre (Índice Rand Ajustado - ARI).
 
-\section{Implementation and Experimental Design}
+\section{Implementação e Design Experimental}
 
-\subsection{Architecture}
-The implementation is structured as a modular Python package. Distance computations are vectorized using NumPy to ensure efficiency. For the Mahalanobis metric, the covariance matrix is regularized to ensure invertibility. The core algorithms operate on precomputed distance matrices managed by a caching strategy to minimize redundant $O(n^2)$ computations across multiple runs.
+\subsection{Arquitetura}
+A implementação está estruturada como um pacote Python modular. Os cálculos de distância são vetorizados usando NumPy para garantir eficiência. Para a métrica de Mahalanobis, a matriz de covariância é regularizada para garantir a invertibilidade. Os algoritmos principais operam sobre matrizes de distância pré-computadas gerenciadas por uma estratégia de cache para minimizar cálculos redundantes de $O(n^2)$.
 
-\subsection{Dataset Selection and Constraints}
-The experimental corpus consists of numeric datasets from the UCI Machine Learning Repository and synthetic datasets generated via Gaussian mixtures. The synthetic sets were explicitly designed to vary cluster eccentricity and overlap, enabling a stress test of the distance metrics.
+\subsection{Seleção de Dados e Restrições}
+O corpus experimental consiste em conjuntos de dados numéricos do Repositório de Aprendizado de Máquina da UCI e dados sintéticos gerados via misturas Gaussianas. Os conjuntos sintéticos foram explicitamente projetados para variar excentricidade e sobreposição de clusters, permitindo um teste de estresse das métricas de distância.
 
-To facilitate extensive hyperparameter sweeping (15 independent runs per configuration across 856 total settings) within computational time constraints, we applied a strict filtering criterion. Datasets exceeding $N=10,000$ samples were excluded. This decision balanced the need for statistical significance across diverse dataset types with the quadratic space complexity $O(n^2)$ required for the precomputed distance matrices used by the exact implementations of the approximation algorithms.
+Para facilitar uma varredura extensiva de hiperparâmetros (15 execuções independentes por configuração em 856 cenários totais) dentro de restrições de tempo computacional, aplicamos um critério rigoroso de filtragem. Bases de dados excedendo $N=10.000$ amostras foram excluídas. Esta decisão equilibrou a necessidade de significância estatística através de diversos tipos de dados com a complexidade de espaço quadrática $O(n^2)$ exigida pelas matrizes de distância pré-computadas usadas pelas implementações exatas dos algoritmos de aproximação.
 
-The final evaluation set comprises 46 datasets (6 UCI, 40 synthetic).
+O conjunto final de avaliação compreende 46 bases de dados (6 UCI, 40 sintéticas).
 
-\subsection{Evaluation Metrics}
-Solution quality is assessed using:
+\subsection{Métricas de Avaliação}
+A qualidade da solução é avaliada utilizando:
 \begin{itemize}
-    \item \textbf{Radius ($r$):} The objective function value (lower is better).
-    \item \textbf{Silhouette Score:} Measures cluster cohesion and separation.
-    \item \textbf{Adjusted Rand Index (ARI):} Measures agreement with ground-truth labels.
-    \item \textbf{Runtime:} Wall-clock execution time.
+    \item \textbf{Raio ($r$):} O valor da função objetivo (quanto menor, melhor).
+    \item \textbf{Coeficiente de Silhueta:} Mede a coesão e separação dos clusters.
+    \item \textbf{Índice Rand Ajustado (ARI):} Mede a concordância com os rótulos reais.
+    \item \textbf{Tempo de Execução:} Tempo real de processamento (\textit{wall-clock}).
 \end{itemize}
 
-\section{Results and Discussion}
+\section{Resultados e Discussão}
 
-\subsection{Algorithm Performance}
-Table \ref{tab:algorithm_comparison} summarizes the aggregate performance. As expected, K-Means outperforms the approximation algorithms in Silhouette score (0.566), benefiting from its centroid-optimization nature which aligns closely with the Silhouette metric.
+\subsection{Desempenho dos Algoritmos}
+A Tabela \ref{tab:algorithm_comparison} resume o desempenho agregado. Como esperado, o K-Means supera os algoritmos de aproximação no Coeficiente de Silhueta (0,566), beneficiando-se de sua natureza de otimização de centroides que se alinha estreitamente com a métrica de Silhueta.
 
-However, the $k$-center algorithms demonstrate extreme computational efficiency. Farthest-First traversal is effectively instantaneous for the tested scales ($< 1$ms on average), while Interval Refinement requires approximately 6ms. This represents a speedup factor of roughly $9\times$ compared to K-Means (54ms), highlighting the utility of $k$-center approximations for rapid initialization or real-time constraints.
+No entanto, os algoritmos de $k$-centros demonstram extrema eficiência computacional. A travessia \textit{Farthest-First} é efetivamente instantânea para as escalas testadas ($< 1$ms em média), enquanto o Refinamento de Intervalo requer aproximadamente 6ms. Isso representa um fator de aceleração de cerca de $9\times$ em comparação ao K-Means (54ms), destacando a utilidade das aproximações de $k$-centros para inicialização rápida ou restrições de tempo real.
 
 \begin{table}[!t]
   \centering
-  \caption{Aggregate Performance by Algorithm (Mean $\pm$ SD)}
+  \caption{Desempenho Agregado por Algoritmo (Média $\pm$ DP)}
   \label{tab:algorithm_comparison}
   \resizebox{\linewidth}{!}{%
     \begin{tabular}{@{}lrrrr@{}}
     \toprule
-     Algorithm & Radius & Silhouette & ARI & Runtime (s) \\
+     Algoritmo & Raio & Silhueta & ARI & Tempo (s) \\
     \midrule
-    Farthest-First & 720.17 $\pm$ 5004.5 & 0.491 $\pm$ 0.168 & 0.462 $\pm$ 0.311 & 0.000 \\
-    Interval Refinement & 854.41 $\pm$ 5542.6 & 0.547 $\pm$ 0.181 & 0.503 $\pm$ 0.343 & 0.006 \\
-    K-Means & \textemdash{} & 0.566 $\pm$ 0.149 & 0.625 $\pm$ 0.356 & 0.054 \\
+    Farthest-First & 720,17 $\pm$ 5004,5 & 0,491 $\pm$ 0,168 & 0,462 $\pm$ 0,311 & 0,000 \\
+    Refinamento de Intervalo & 854,41 $\pm$ 5542,6 & 0,547 $\pm$ 0,181 & 0,503 $\pm$ 0,343 & 0,006 \\
+    K-Means & --- & 0,566 $\pm$ 0,149 & 0,625 $\pm$ 0,356 & 0,054 \\
     \bottomrule
     \end{tabular}
   }
 \end{table}
 
-\subsection{Impact of Distance Metrics}
-A key finding of this study concerns the behavior of Mahalanobis distance on anisotropic clusters. Theoretically, Mahalanobis distance should favor elliptical clusters by normalizing variance. However, our empirical results (Table \ref{tab:metric_comparison}) show that while Mahalanobis distance slightly improves Silhouette scores compared to Farthest-First using Euclidean distance, it does not consistently yield higher ARI.
+\subsection{Impacto das Métricas de Distância}
+Um achado chave deste estudo diz respeito ao comportamento da distância de Mahalanobis em clusters anisotrópicos. Teoricamente, a distância de Mahalanobis deveria favorecer clusters elípticos ao normalizar a variância. No entanto, nossos resultados empíricos (Tabela \ref{tab:metric_comparison}) mostram que, embora a distância de Mahalanobis melhore ligeiramente os escores de Silhueta em comparação com o \textit{Farthest-First} usando distância Euclidiana, ela não produz consistentemente um ARI mais alto.
 
-This suggests a potential misalignment between the $k$-center objective (min-max radius) and the global covariance normalization of the Mahalanobis metric. The $k$-center problem is highly sensitive to outliers; Mahalanobis rescaling can sometimes amplify the relative distance of outliers in low-variance directions, thereby degrading the min-max radius objective.
+Isso sugere um possível desalinhamento entre o objetivo do $k$-centros (raio min-max) e a normalização de covariância global da métrica de Mahalanobis. O problema dos $k$-centros é altamente sensível a \textit{outliers}; o reescalonamento de Mahalanobis pode, por vezes, amplificar a distância relativa de \textit{outliers} em direções de baixa variância, degradando assim o objetivo do raio min-max.
 
 \begin{table}[!t]
   \centering
-  \caption{Aggregate Performance by Distance Metric}
+  \caption{Desempenho Agregado por Métrica de Distância}
   \label{tab:metric_comparison}
   \resizebox{\linewidth}{!}{%
     \begin{tabular}{@{}lrrrr@{}}
     \toprule
-     Metric & Radius & Silhouette & ARI & Runtime (s) \\
+     Métrica & Raio & Silhueta & ARI & Tempo (s) \\
     \midrule
-    Euclidean & \textemdash{} & 0.566 $\pm$ 0.149 & 0.625 $\pm$ 0.356 & 0.054 \\
-    Mahalanobis & 638.65 $\pm$ 4059.6 & 0.512 $\pm$ 0.183 & 0.447 $\pm$ 0.348 & 0.005 \\
-    Minkowski & 926.92 $\pm$ 6024.4 & 0.549 $\pm$ 0.178 & 0.520 $\pm$ 0.330 & 0.005 \\
+    Euclidiana & --- & 0,566 $\pm$ 0,149 & 0,625 $\pm$ 0,356 & 0,054 \\
+    Mahalanobis & 638,65 $\pm$ 4059,6 & 0,512 $\pm$ 0,183 & 0,447 $\pm$ 0,348 & 0,005 \\
+    Minkowski & 926,92 $\pm$ 6024,4 & 0,549 $\pm$ 0,178 & 0,520 $\pm$ 0,330 & 0,005 \\
     \bottomrule
     \end{tabular}
   }
 \end{table}
 
-\subsection{Refinement Granularity}
-The Interval Refinement algorithm exposes a trade-off between precision and runtime. We observed diminishing returns at finer granularities. Reducing the interval width from 12\% to 4\% yielded negligible improvements in Silhouette score (0.541 vs 0.535) but increased runtime by roughly 14\%. A width of 12-18\% appears to be the Pareto-optimal configuration for this implementation.
+\subsection{Granularidade do Refinamento}
+O algoritmo de Refinamento de Intervalo expõe um compromisso (\textit{trade-off}) entre precisão e tempo de execução. Observamos retornos decrescentes em granularidades mais finas. Reduzir a largura do intervalo de 12\% para 4\% gerou melhorias negligenciáveis no escore de Silhueta (0,541 vs 0,535), mas aumentou o tempo de execução em aproximadamente 14\%. Uma largura de 12--18\% parece ser a configuração ótima de Pareto para esta implementação.
 
+% Nota: Assegure-se de que os arquivos de imagem existam no caminho especificado ou remova estas figuras se não as tiver.
 \begin{figure}[!t]
   \centering
+  % Exemplo de nome de arquivo. Atualize conforme seus arquivos reais.
   \includegraphics[width=\linewidth]{silhouette_by_algorithm.png}
-  \caption{Average Silhouette score comparison. K-Means maintains a lead, but Interval Refinement closes the gap significantly compared to the greedy Farthest-First approach.}
+  \caption{Comparação média do coeficiente de Silhueta. O K-Means mantém a liderança, mas o Refinamento de Intervalo reduz a lacuna significativamente em comparação com a abordagem gulosa \textit{Farthest-First}.}
 \end{figure}
 
-\section{Conclusion}
+\section{Conclusão}
 
-This study confirms that 2-approximation algorithms for $k$-center provide a highly efficient alternative to K-Means, offering order-of-magnitude speedups at the cost of moderate reductions in cluster cohesion (Silhouette) and ground-truth recovery (ARI). The Interval Refinement variant offers a valuable middle ground, improving solution quality over the greedy approach with minimal computational overhead. Future work should investigate identifying a localized Mahalanobis metric (per-cluster covariance) to better address the limitations observed with global covariance normalization in complex geometric arrangements.
+Este estudo confirma que algoritmos de 2-aproximação para $k$-centros fornecem uma alternativa altamente eficiente ao K-Means, oferecendo acelerações de ordem de magnitude ao custo de reduções moderadas na coesão do cluster (Silhueta) e recuperação da verdade terrestre (ARI). A variante de Refinamento de Intervalo oferece um meio-termo valioso, melhorando a qualidade da solução em relação à abordagem gulosa com sobrecarga computacional mínima. Trabalhos futuros devem investigar a identificação de uma métrica de Mahalanobis localizada (covariância por cluster) para melhor abordar as limitações observadas com a normalização de covariância global em arranjos geométricos complexos.
 
 \bibliographystyle{IEEEtran}
 
