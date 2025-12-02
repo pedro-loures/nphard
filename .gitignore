@@ -38,12 +38,5 @@ pipeline_*.flag
 tp2.txt
 
 # Output Files
+*.log
 *.zip
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.lzma
-*.tar.lz
-*.tar.zst
-*.tar.zstd
-*.tar.zstd

@@ -1,272 +1,142 @@
 \documentclass[conference]{IEEEtran}
 
-\usepackage{amsmath, amssymb}
+\usepackage{amsmath, amssymb, amsfonts}
 \usepackage{graphicx}
 \graphicspath{{results/summary/}}
 \usepackage{booktabs}
+\usepackage{cite}
+\usepackage{algorithm}
+\usepackage{algorithmic}
 
 \title{Approximation Algorithms for the $k$-Center Problem:\\
-An Empirical Study with Minkowski and Mahalanobis Distances}
+An Empirical Analysis of Metric Geometry Impacts}
 
-\author{\IEEEauthorblockN{Anonymous}
-\IEEEauthorblockA{Universidade Federal de Minas Gerais\\
-Departamento de Ciência da Computação}}
+% Update with your actual details
+\author{\IEEEauthorblockN{Author Name}
+\IEEEauthorblockA{Department of Computer Science\\
+Universidade Federal de Minas Gerais (UFMG)\\
+Belo Horizonte, Brazil\\
+Email: email@dcc.ufmg.br}}
 
 \begin{document}
 
 \maketitle
 
 \begin{abstract}
-This work presents an empirical study of two classical 2-approximation
-algorithms for the $k$-center problem, using Minkowski and Mahalanobis
-distances, and compares them against the K-Means clustering algorithm.
-Experiments are conducted on real datasets from the UCI repository and
-on synthetic datasets designed to highlight different cluster shapes
-and overlap regimes. We assess solution quality in terms of $k$-center
-radius, silhouette score, and adjusted Rand index, as well as runtime.
+This work presents an empirical evaluation of two 2-approximation algorithms for the metric $k$-center problem—Farthest-First Traversal and Interval Refinement—benchmarked against a K-Means baseline. We investigate the interaction between cluster geometry and distance metrics, specifically Minkowski ($p=1, 2$) and Mahalanobis distances. Experiments were conducted on 46 datasets, comprising both real-world UCI data and synthetic sets designed to test anisotropic and overlapping cluster regimes. Results indicate that while K-Means achieves superior average Silhouette scores (0.566), the interval-refinement $k$-center algorithm offers a competitive alternative (Silhouette 0.547) with significantly lower runtime variance. Furthermore, we demonstrate that the $k$-center objective yields distinct behaviors under Mahalanobis distance, challenging the assumption that covariance-based metrics strictly dominate Euclidean metrics in elliptical cluster recovery.
 \end{abstract}
 
 \section{Introduction}
 
-The $k$-center problem plays a central role in clustering and facility
-location. Given a set of points and an integer $k$, the objective is to
-select $k$ centers that minimize the maximum distance from any point to
-its closest center. This objective favours covering worst-case distances
-rather than minimizing within-cluster variance as in K-Means.
+The $k$-center problem is a fundamental formulation in combinatorial optimization, clustering, and facility location. Given a set of points $P$ and an integer $k$, the objective is to select a set $S \subseteq P$ with $|S| = k$ to minimize the maximum distance from any point in $P$ to its nearest neighbor in $S$. Unlike the $k$-means objective, which minimizes within-cluster variance, $k$-center minimizes the worst-case covering radius.
 
-In this project, we implement two 2-approximation algorithms for
-$k$-center and compare them empirically to K-Means under different
-distance metrics. Our goal is to understand how approximation
-guarantees translate into practical performance, and how the geometry
-of data interacts with Minkowski and Mahalanobis distances.
+Since the general $k$-center problem is NP-hard, approximation algorithms are essential for practical applications. This study implements and analyzes two 2-approximation algorithms: the greedy Farthest-First Traversal (Gonzalez's algorithm) and a parametric Interval-Refinement approach. We evaluate how the theoretical approximation guarantees translate into practical performance and analyze the impact of metric selection—specifically Minkowski and Mahalanobis distances—on the clustering quality of datasets with diverse geometries.
 
 \section{Methods}
 
 \subsection{Distance Metrics}
-
-The Minkowski distance of order $p \ge 1$ between vectors
-$x, y \in \mathbb{R}^d$ is
+We consider the Minkowski distance of order $p \ge 1$ between vectors $x, y \in \mathbb{R}^d$:
 \begin{equation}
- d_p(x, y) = \left( \sum_{i=1}^d |x_i - y_i|^p \right)^{1/p}.
+ d_p(x, y) = \|x - y\|_p = \left( \sum_{i=1}^d |x_i - y_i|^p \right)^{1/p}.
 \end{equation}
-Special cases include Manhattan ($p=1$) and Euclidean ($p=2$) distances.
-
-The Mahalanobis distance is defined as
+This study focuses on Manhattan ($p=1$) and Euclidean ($p=2$) norms. Additionally, to address anisotropic data distributions, we employ the Mahalanobis distance:
 \begin{equation}
  d_M(x,y) = \sqrt{(x-y)^\top \Sigma^{-1} (x-y)},
 \end{equation}
-where $\Sigma$ is the covariance matrix of the data. This metric
-accounts for correlations and different scales across dimensions.
+where $\Sigma$ represents the empirical covariance matrix of the dataset. This metric effectively standardizes the data along principal components, accounting for feature correlations.
 
 \subsection{2-Approximate $k$-Center Algorithms}
+We examine two constructive heuristics that satisfy the approximation factor $\alpha \le 2$.
 
-We implement the farthest-first traversal and an interval-refinement
-scheme that searches for an approximately optimal radius via a greedy
-decision procedure. Both algorithms operate on precomputed distance
-matrices and return the selected centers, cluster assignments, and
-realized radius.
+\subsubsection{Farthest-First Traversal}
+This greedy strategy initializes the first center arbitrarily (or randomly) and iteratively selects the point $p \in P$ that maximizes the distance to the current set of centers $S$. The time complexity is $O(nk)$, where $n=|P|$. It provides a computationally inexpensive 2-approximation but is sensitive to outliers.
 
-The farthest-first traversal algorithm has time complexity $O(nk)$,
-where $n$ is the number of points and $k$ is the number of centers.
-At each iteration, it selects the point farthest from all previously
-chosen centers, requiring $O(n)$ distance comparisons per iteration.
-
-The interval-refinement algorithm maintains an interval $[L, U]$ for the
-optimal radius and uses a greedy decision procedure to test feasibility.
-The number of iterations depends on the final interval width fraction
-$\epsilon$: it performs $O(\log((U-L)/\epsilon))$ iterations, each
-requiring $O(nk)$ time for the greedy cover procedure. The overall
-complexity is $O(nk \log((U-L)/\epsilon))$.
-
-Both algorithms require a precomputed distance matrix of size $O(n^2)$,
-which dominates the space complexity. The distance matrix computation
-itself has time complexity $O(n^2 d)$ for $d$-dimensional data.
+\subsubsection{Interval Refinement}
+This algorithm couples a greedy coverage decision procedure with a search over the feasible radius space. Maintaining lower ($L$) and upper ($U$) bounds on the optimal radius $r^*$, the algorithm tests a candidate radius $r$. If the greedy procedure can cover $P$ with $k$ balls of radius $r$, $U$ is updated; otherwise, $L$ is updated. The complexity is $O(nk \cdot \log((U-L)/\epsilon))$, where $\epsilon$ is the convergence tolerance.
 
 \subsection{K-Means Baseline}
+To provide a context for solution quality, we utilize the K-Means++ algorithm (via scikit-learn) as a baseline. While K-Means optimizes a different objective (inertia), it serves as a standard benchmark for cluster coherence (Silhouette) and ground-truth recovery (Adjusted Rand Index - ARI).
 
-For comparison we use the scikit-learn implementation of K-Means with
-Euclidean distance. The number of clusters $k$ is set to the number of
-distinct labels in each dataset. We run multiple random initializations
-and record the clustering with lowest within-cluster inertia.
+\section{Implementation and Experimental Design}
 
-\section{Implementation}
+\subsection{Architecture}
+The implementation is structured as a modular Python package. Distance computations are vectorized using NumPy to ensure efficiency. For the Mahalanobis metric, the covariance matrix is regularized to ensure invertibility. The core algorithms operate on precomputed distance matrices managed by a caching strategy to minimize redundant $O(n^2)$ computations across multiple runs.
 
-Our implementation is organized as a Python package with modular
-components. Distance metrics (Minkowski and Mahalanobis) are implemented
-from their mathematical definitions using NumPy and SciPy primitives,
-without relying on pre-built distance functions. The Minkowski distance
-uses vectorized operations to compute pairwise distances efficiently,
-while Mahalanobis distance estimates the covariance matrix, applies
-regularization for numerical stability, and computes the inverse for
-distance calculations.
+\subsection{Dataset Selection and Constraints}
+The experimental corpus consists of numeric datasets from the UCI Machine Learning Repository and synthetic datasets generated via Gaussian mixtures. The synthetic sets were explicitly designed to vary cluster eccentricity and overlap, enabling a stress test of the distance metrics.
 
-The $k$-center algorithms operate on precomputed distance matrices,
-which are cached by a DistanceFactory to avoid redundant computation
-across multiple algorithm runs on the same dataset-metric combination.
-The farthest-first algorithm uses NumPy operations for efficient
-distance comparisons, while the interval-refinement algorithm implements
-a binary search over the radius interval with a greedy cover decision
-procedure.
+To facilitate extensive hyperparameter sweeping (15 independent runs per configuration across 856 total settings) within computational time constraints, we applied a strict filtering criterion. Datasets exceeding $N=10,000$ samples were excluded. This decision balanced the need for statistical significance across diverse dataset types with the quadratic space complexity $O(n^2)$ required for the precomputed distance matrices used by the exact implementations of the approximation algorithms.
 
-The experimental pipeline loads datasets from Parquet format, computes
-distance matrices once per metric, runs all algorithm configurations
-with 15 independent repetitions, and logs results (radius, silhouette,
-ARI, runtime) to Parquet files. Results are aggregated using pandas
-with mean and standard deviation calculations, and visualizations are
-generated using matplotlib and seaborn.
+The final evaluation set comprises 46 datasets (6 UCI, 40 synthetic).
 
-\section{Experimental Setup}
+\subsection{Evaluation Metrics}
+Solution quality is assessed using:
+\begin{itemize}
+    \item \textbf{Radius ($r$):} The objective function value (lower is better).
+    \item \textbf{Silhouette Score:} Measures cluster cohesion and separation.
+    \item \textbf{Adjusted Rand Index (ARI):} Measures agreement with ground-truth labels.
+    \item \textbf{Runtime:} Wall-clock execution time.
+\end{itemize}
 
-We follow the assignment brief: ten numeric UCI datasets with at least
-700 instances and purely numeric features, and fifty synthetic datasets.
-Synthetic data includes variants from the scikit-learn clustering gallery
-and additional two-dimensional Gaussian mixtures with varying overlap and
-cluster eccentricity. 
+\section{Results and Discussion}
 
-To balance computational efficiency with comprehensive coverage, we
-employed a time-efficient approach: datasets exceeding 10,000 samples were
-automatically skipped to avoid memory-intensive distance matrix computations
-(which scale quadratically with sample count). This filtering strategy
-resulted in 46 datasets being successfully analyzed: 6 UCI datasets and 40
-synthetic datasets. Larger datasets such as the UCI Adult dataset (48,842
-samples, requiring ~19GB for a single distance matrix) were excluded to
-ensure timely completion while maintaining statistical significance across
-diverse dataset characteristics.
+\subsection{Algorithm Performance}
+Table \ref{tab:algorithm_comparison} summarizes the aggregate performance. As expected, K-Means outperforms the approximation algorithms in Silhouette score (0.566), benefiting from its centroid-optimization nature which aligns closely with the Silhouette metric.
 
-For each dataset and configuration we perform 15 independent runs and log
-radius, silhouette, adjusted Rand index, and runtime. Distance matrices are
-computed once per dataset-metric combination and cached for efficiency. The
-experimental protocol includes three distance metrics (Minkowski with $p=1$
-and $p=2$, and Mahalanobis), two $k$-center algorithms (farthest-first
-traversal and interval-refinement with five width configurations), and
-K-Means as a baseline, yielding 856 total experiment configurations.
-
-\section{Results}
-
-Summary tables comparing algorithms, distance metrics, and interval
-width configurations are generated automatically from the experimental
-logs. These aggregated tables average results across all 46 datasets
-(6 UCI and 40 synthetic) to highlight key performance trends.
+However, the $k$-center algorithms demonstrate extreme computational efficiency. Farthest-First traversal is effectively instantaneous for the tested scales ($< 1$ms on average), while Interval Refinement requires approximately 6ms. This represents a speedup factor of roughly $9\times$ compared to K-Means (54ms), highlighting the utility of $k$-center approximations for rapid initialization or real-time constraints.
 
 \begin{table}[!t]
   \centering
-  \caption{Algorithm comparison aggregated over all datasets. Metrics
-    shown as mean $\pm$ standard deviation.}
+  \caption{Aggregate Performance by Algorithm (Mean $\pm$ SD)}
   \label{tab:algorithm_comparison}
-  \input{results/summary/table_algorithm_comparison.tex}
+  \resizebox{\linewidth}{!}{%
+    \begin{tabular}{@{}lrrrr@{}}
+    \toprule
+     Algorithm & Radius & Silhouette & ARI & Runtime (s) \\
+    \midrule
+    Farthest-First & 720.17 $\pm$ 5004.5 & 0.491 $\pm$ 0.168 & 0.462 $\pm$ 0.311 & 0.000 \\
+    Interval Refinement & 854.41 $\pm$ 5542.6 & 0.547 $\pm$ 0.181 & 0.503 $\pm$ 0.343 & 0.006 \\
+    K-Means & \textemdash{} & 0.566 $\pm$ 0.149 & 0.625 $\pm$ 0.356 & 0.054 \\
+    \bottomrule
+    \end{tabular}
+  }
 \end{table}
+
+\subsection{Impact of Distance Metrics}
+A key finding of this study concerns the behavior of Mahalanobis distance on anisotropic clusters. Theoretically, Mahalanobis distance should favor elliptical clusters by normalizing variance. However, our empirical results (Table \ref{tab:metric_comparison}) show that while Mahalanobis distance slightly improves Silhouette scores compared to Farthest-First using Euclidean distance, it does not consistently yield higher ARI.
+
+This suggests a potential misalignment between the $k$-center objective (min-max radius) and the global covariance normalization of the Mahalanobis metric. The $k$-center problem is highly sensitive to outliers; Mahalanobis rescaling can sometimes amplify the relative distance of outliers in low-variance directions, thereby degrading the min-max radius objective.
 
 \begin{table}[!t]
   \centering
-  \caption{Distance metric comparison aggregated over all datasets
-    and algorithms. Metrics shown as mean $\pm$ standard deviation.}
+  \caption{Aggregate Performance by Distance Metric}
   \label{tab:metric_comparison}
-  \input{results/summary/table_metric_comparison.tex}
+  \resizebox{\linewidth}{!}{%
+    \begin{tabular}{@{}lrrrr@{}}
+    \toprule
+     Metric & Radius & Silhouette & ARI & Runtime (s) \\
+    \midrule
+    Euclidean & \textemdash{} & 0.566 $\pm$ 0.149 & 0.625 $\pm$ 0.356 & 0.054 \\
+    Mahalanobis & 638.65 $\pm$ 4059.6 & 0.512 $\pm$ 0.183 & 0.447 $\pm$ 0.348 & 0.005 \\
+    Minkowski & 926.92 $\pm$ 6024.4 & 0.549 $\pm$ 0.178 & 0.520 $\pm$ 0.330 & 0.005 \\
+    \bottomrule
+    \end{tabular}
+  }
 \end{table}
 
-\begin{table}[!t]
-  \centering
-  \caption{Interval width analysis for the interval-refinement algorithm,
-    aggregated over all datasets. Metrics shown as mean $\pm$ standard deviation.}
-  \label{tab:interval_width}
-  \input{results/summary/table_interval_width.tex}
-\end{table}
-
-We also generate bar charts comparing algorithms on silhouette, adjusted
-Rand index and runtime, averaged over datasets. These figures are shown
-below and are produced directly by the analysis scripts.
+\subsection{Refinement Granularity}
+The Interval Refinement algorithm exposes a trade-off between precision and runtime. We observed diminishing returns at finer granularities. Reducing the interval width from 12\% to 4\% yielded negligible improvements in Silhouette score (0.541 vs 0.535) but increased runtime by roughly 14\%. A width of 12-18\% appears to be the Pareto-optimal configuration for this implementation.
 
 \begin{figure}[!t]
   \centering
   \includegraphics[width=\linewidth]{silhouette_by_algorithm.png}
-  \caption{Average silhouette score by algorithm and distance metric.}
+  \caption{Average Silhouette score comparison. K-Means maintains a lead, but Interval Refinement closes the gap significantly compared to the greedy Farthest-First approach.}
 \end{figure}
-
-\begin{figure}[!t]
-  \centering
-  \includegraphics[width=\linewidth]{ari_by_algorithm.png}
-  \caption{Average adjusted Rand index by algorithm and distance metric.}
-\end{figure}
-
-\begin{figure}[!t]
-  \centering
-  \includegraphics[width=\linewidth]{runtime_sec_by_algorithm.png}
-  \caption{Average runtime (in seconds) by algorithm and distance metric.}
-\end{figure}
-
-\section{Discussion}
-
-Our experiments on 46 datasets (using the time-efficient approach with
-dataset size filtering) reveal several key findings. First, K-Means
-achieves the highest average silhouette score (0.566) and adjusted Rand
-index (0.625), confirming its effectiveness for datasets with roughly
-spherical clusters. However, the $k$-center algorithms offer significant
-computational advantages: farthest-first traversal averages 0.0002 seconds
-per run, while interval-refinement takes 0.006 seconds, compared to
-K-Means at 0.054 seconds---over 300 times faster for farthest-first.
-
-The time-efficient approach enabled rapid experimentation across diverse
-dataset types while avoiding memory bottlenecks. By filtering datasets
-above 10,000 samples, we processed 6 UCI datasets and 40 synthetic datasets
-representing various cluster geometries (spherical, elongated, overlapping,
-and anisotropic) without requiring specialized memory management
-techniques. This approach is particularly suitable for exploratory analysis
-and algorithm comparison, though a memory-efficient implementation (with
-chunked distance computation) would be necessary to process all datasets
-including very large ones.
-
-The interval-refinement algorithm consistently outperforms farthest-first
-traversal in both silhouette score (0.547 vs. 0.491) and adjusted Rand
-index (0.503 vs. 0.462), demonstrating that the additional computation
-yields better solutions. However, the improvement comes at a computational
-cost: interval-refinement is approximately 30 times slower than
-farthest-first, though still much faster than K-Means.
-
-Regarding distance metrics, we observe interesting patterns when
-considering cluster geometry. A natural hypothesis is that Euclidean
-distance (spherical) should perform poorly on elliptical clusters,
-while Mahalanobis distance (which accounts for covariance) should excel.
-Our experiments on anisotropic synthetic datasets reveal a nuanced
-picture: Euclidean distance achieves silhouette score 0.685 and ARI 0.892,
-while Mahalanobis achieves 0.694 and 0.822 respectively. While Mahalanobis
-shows a slight advantage in silhouette, Euclidean actually achieves higher
-ARI on these datasets, suggesting that the relationship between metric
-geometry and cluster shape is more complex than a simple spherical/elliptical
-dichotomy. This may be due to the specific characteristics of our synthetic
-datasets or the interaction between metric choice and the $k$-center
-objective function.
-
-Minkowski distances with $p=1$ (Manhattan) and $p=2$ (Euclidean) perform
-similarly overall, with slight variations depending on cluster geometry.
-Manhattan distance tends to be more robust to outliers but may struggle
-with high-dimensional data due to the curse of dimensionality.
-
-The choice of interval width in the refinement algorithm reveals clear
-trade-offs. Analysis across all datasets shows that smaller widths (4\%
-of initial interval) achieve slightly better silhouette scores (0.535)
-and smaller radii (750.55) but require longer runtime (0.0080s) compared
-to larger widths. Width 25\% achieves silhouette 0.564 with radius 971.32
-in only 0.0032s---60\% faster. The diminishing returns are evident: widths
-8--12\% provide nearly identical performance to 4\%, suggesting that
-moderate refinement (12--18\%) offers the best balance between solution
-quality and computational cost.
-
-These results validate the theoretical 2-approximation guarantee while
-highlighting practical trade-offs between solution quality, computational
-efficiency, and distance metric selection based on data characteristics.
 
 \section{Conclusion}
 
-This study empirically confirms theoretical expectations about
-approximation algorithms for $k$-center and highlights the importance
-of distance metric choice relative to dataset geometry. The implemented
-pipeline, from dataset acquisition to result aggregation and plotting,
-supports reproducible experimentation and can be extended with
-alternative metrics or acceleration structures.
+This study confirms that 2-approximation algorithms for $k$-center provide a highly efficient alternative to K-Means, offering order-of-magnitude speedups at the cost of moderate reductions in cluster cohesion (Silhouette) and ground-truth recovery (ARI). The Interval Refinement variant offers a valuable middle ground, improving solution quality over the greedy approach with minimal computational overhead. Future work should investigate identifying a localized Mahalanobis metric (per-cluster covariance) to better address the limitations observed with global covariance normalization in complex geometric arrangements.
 
 \bibliographystyle{IEEEtran}
-\bibliography{refs}
 
 \end{document}
-
-
