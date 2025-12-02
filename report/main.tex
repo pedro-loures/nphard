@@ -1,0 +1,127 @@
+\documentclass[conference]{IEEEtran}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{multirow}
+\usepackage{siunitx}
+
+\graphicspath{{../results/summary/}}
+
+\title{Relatório TP2 -- 2-Aproximações para o Problema dos $k$-Centros}
+
+\author{\IEEEauthorblockN{Pedro Loures}
+\IEEEauthorblockA{Departamento de Ciência da Computação\\
+Universidade Federal de Minas Gerais\\
+Email: pedro.loures@example.com}}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Este artigo relata o desenvolvimento, a implementação e a avaliação empírica dos algoritmos 2-aproximados para o problema dos $k$-centros exigidos no Trabalho Prático 2 (TP2) da disciplina DCC207/Algoritmos 2. Implementamos distâncias de Minkowski ($p\in\{1,2\}$) e Mahalanobis utilizando apenas operações vetoriais do NumPy/SciPy, as variantes de \emph{farthest-first traversal} e refinamento de intervalos descritas em sala, além do baseline K-Means da biblioteca Scikit-Learn. Os algoritmos foram executados em 10 bases reais do OpenML e 50 conjuntos sintéticos inspirados na galeria de clustering do Scikit-Learn, totalizando 15 repetições por configuração. Comparamos raio de cobertura, qualidade (silhueta e índice de Rand ajustado) e tempo de execução, discutindo o impacto das métricas e da largura final do intervalo. Por fim, apontamos limitações observadas (memória, geometria dos dados) e sugestões de trabalhos futuros.
+\end{abstract}
+
+\begin{IEEEkeywords}
+k-center, algoritmos aproximativos, Minkowski, Mahalanobis, K-Means
+\end{IEEEkeywords}
+
+\section{Introdução}
+O problema dos $k$-centros procura escolher $k$ representantes de um conjunto de pontos de forma a minimizar o maior raio necessário para cobrir todas as instâncias. Trata-se de um problema NP-difícil, motivo pelo qual algoritmos aproximativos com garantia de fator 2 são discutidos em sala de aula no contexto do TP2 da disciplina Algoritmos 2 \cite{tp2brief}. O objetivo prático é implementar esses algoritmos usando Python 3, sem recorrer a funções de distância prontas, e comparar as soluções com o K-Means padrão \cite{scikit-learn}. Além da implementação, o trabalho exige a construção de um pipeline experimental completo, capaz de executar centenas de experimentos reprodutíveis e consolidar os resultados em formato de artigo científico compatível com o template IEEE.
+
+\section{Fundamentos e Implementação}
+\subsection{Métricas de distância}
+\subsubsection{Minkowski}
+O módulo \texttt{src/tp2/distances/minkowski.py} implementa a função \texttt{pairwise\_minkowski}, que calcula a matriz de distâncias entre dois subconjuntos de pontos aplicando \emph{broadcasting} do NumPy. A função suporta qualquer $p\geq 1$ através da classe \texttt{MinkowskiParams}; os casos $p=1$ e $p=2$ reduzem às distâncias Manhattan e Euclidiana, respectivamente. A complexidade é $O(n_x n_y d)$, onde $n_x$ e $n_y$ são o número de pontos de cada conjunto e $d$ é a dimensionalidade. Para evitar armazenar matrizes $n\times n$ em bases grandes, a classe \texttt{MinkowskiDistanceFunction} expõe chamadas \texttt{dist}, \texttt{dist\_row} e \texttt{max\_distance}, permitindo o cálculo sob demanda.
+
+\subsubsection{Mahalanobis}
+O arquivo \texttt{src/tp2/distances/mahalanobis.py} implementa a estimação da covariância, sua inversa com regularização (classe \texttt{MahalanobisParams}) e o cálculo vetorial da distância de Mahalanobis. Após obter o fator de Cholesky da matriz inversa, todos os pontos são transformados para um espaço onde a distância Euclidiana equivale à distância de Mahalanobis original, reduzindo o custo de cada consulta para $O(d)$. Assim como na métrica anterior, há uma versão matricial (\texttt{pairwise\_mahalanobis}) e uma versão \emph{on-the-fly} (\texttt{MahalanobisDistanceFunction}).
+
+\subsubsection{DistanceFactory e memória}
+O componente \texttt{DistanceFactory} (\texttt{src/tp2/distances/factory.py}) centraliza a criação de matrizes ou funções de distância, além de armazenar em cache resultados indexados por par (\texttt{dataset\_id}, métrica). A função \texttt{estimate\_distance\_matrix\_memory} estima o custo em GB de uma matriz completa, permitindo decidir se o pipeline deve operar em modo tradicional ou \emph{memory-efficient}. Esse desenho garante que algoritmos e métricas compartilhem os mesmos cálculos, reduzindo o custo total das 15 repetições exigidas por conjunto de dados.
+
+\subsection{Algoritmos 2-aproximados}
+\subsubsection{Farthest-first traversal}
+O arquivo \texttt{src/tp2/algorithms/kcenter\_farthest\_first.py} contém a implementação da heurística de Gonzalez: inicia-se com um centro aleatório e, a cada iteração, adiciona-se o ponto mais distante do conjunto atual de centros. As rotinas auxiliares concentradas em \texttt{algorithms/\_shared.py} normalizam a entrada de distâncias (\texttt{DistanceInput}), mantém o vetor de distâncias mínimas e calculam o raio da solução. A complexidade total por repetição é $O(kn)$ e o algoritmo garante fator 2 de aproximação.
+
+\subsubsection{Refinamento de intervalos}
+O algoritmo em \texttt{src/tp2/algorithms/kcenter\_interval\_refinement.py} mantém um intervalo $[lo, hi]$ que contém o raio ótimo. A cada iteração avalia-se o ponto médio via um procedimento guloso de cobertura (\texttt{\_decision\_greedy\_cover}). Se a cobertura é possível com $k$ centros, a busca continua no intervalo inferior; caso contrário, o limite inferior é atualizado. O processo termina quando o comprimento do intervalo é menor que uma fração configurável (\texttt{width\_fraction}) do comprimento inicial. A escolha dessa fração permite explorar o trade-off entre custo computacional (número de avaliações) e qualidade do limite superior obtido.
+
+\subsection{Baseline K-Means e pipeline}
+O baseline utiliza a classe \texttt{KMeans} do Scikit-Learn \cite{scikit-learn} com \texttt{n\_init} automático, servindo como comparação popular para algoritmos de agrupamento. Toda a orquestração está em \texttt{src/tp2/experiments/run.py}. O pipeline percorre diretórios contendo \texttt{features.parquet} e \texttt{labels.parquet}, carrega os dados via pandas, decide se irá computar a matriz de distâncias completa ou uma função sob demanda e executa 15 repetições por métrica/algoritmo. As métricas de avaliação incluem: (i) raio da solução, (ii) índice de silhueta (usando a mesma métrica de distância quando disponível), (iii) índice de Rand ajustado (\texttt{adjusted\_rand\_score}) e (iv) tempo de execução. Os resultados são persistidos em arquivos Parquet, um por \texttt{dataset\_id}. O módulo \texttt{src/tp2/analysis/summarize.py} agrega estatísticas (média $\pm$ desvio) e gera tabelas LaTeX e figuras PNG usadas neste relatório.
+
+\section{Conjuntos de Dados e Protocolo Experimental}
+\subsection{Bases UCI}
+O arquivo \texttt{configs/datasets.yaml} lista 10 bases numéricas do OpenML, cada uma com pelo menos 700 instâncias (\emph{adult}, \emph{shuttle}, \emph{magic}, \emph{phoneme}, \emph{satimage}, \emph{segment}, \emph{page-blocks}, \emph{optdigits}, \emph{pen-digits} e \emph{vehicle}). O script \texttt{tp2.data.uci} baixa os dados, mantém apenas colunas numéricas para o agrupamento e salva \texttt{features.parquet}, \texttt{labels.parquet} (classe ignorada durante a escolha de centros) e \texttt{metadata.json}. Como exemplo, a base \emph{adult} possui 48\,842 instâncias e 6 atributos contínuos.
+
+\subsection{Conjuntos sintéticos}
+O módulo \texttt{tp2.data.synthetic} replica seis cenários clássicos apresentados na galeria de clustering do Scikit-Learn \cite{skgallery}, gerando cinco instâncias por cenário (total de 30). Cada amostra possui ao menos 1\,200 pontos, garantindo paridade com as bases reais. Além disso, foram gerados 10 conjuntos adicionais a partir de misturas gaussianas bivariadas com covariâncias anisotrópicas controladas. Todos os conjuntos sintéticos armazenam parâmetros completos (sementes, transformações, matrizes de covariância) em \texttt{metadata.json}, tornando a experimentação reproduzível.
+
+\subsection{Protocolo}
+Para cada conjunto de dados determinamos $k$ como o número de rótulos distintos no arquivo de labels. Cada métrica de distância (Minkowski $p=1$, Minkowski $p=2$ e Mahalanobis) é executada 15 vezes para os dois algoritmos 2-aproximados, e repetimos o mesmo número de execuções para o K-Means. O algoritmo de refinamento utiliza larguras finais em $\{25\%, 18\%, 12\%, 8\%, 4\%\}$, conforme recomendado em \cite{tp2brief}. Quando as matrizes de distância seriam muito grandes, o pipeline troca automaticamente para o modo \emph{memory-efficient}, usando funções sob demanda e recalculando temporariamente os dados necessários para o índice de silhueta. Os artefatos consolidados (arquivos \texttt{summary.*}, tabelas \texttt{table\_*.tex} e figuras \texttt{*.png}) são gerados por \texttt{tp2.analysis.summarize} a partir dos Parquets crus. Testes automatizados em \texttt{tests/test\_distances.py} e \texttt{tests/test\_kcenter\_algorithms.py} validam tanto as rotinas numéricas quanto o comportamento esperado das heurísticas em instâncias pequenas.
+
+\section{Resultados e Discussão}
+\subsection{Visão geral por algoritmo}
+A Tabela~\ref{tab:algorithms} resume médias e desvios-padrão agregados sobre todas as bases para cada algoritmo. Como esperado, os dois algoritmos de $k$-centros atingem raios menores que o K-Means, já que otimizam diretamente essa função objetivo. O \emph{farthest-first} é quase instantâneo (apenas atualizações de vetores) e entrega o menor raio médio. O algoritmo de refinamento apresenta qualidade (silhueta e ARI) mais próxima do K-Means ao custo de tempo adicional. O K-Means ainda domina em ARI, principalmente em bases quase esféricas.
+
+\begin{table}[t]
+    \centering
+    \caption{Comparação global entre algoritmos}
+    \label{tab:algorithms}
+    \input{../results/summary/table_algorithm_comparison.tex}
+\end{table}
+
+\subsection{Efeito da métrica de distância}
+A Tabela~\ref{tab:metrics} compara o impacto de cada métrica. A versão Mahalanobis alcança o menor raio médio graças à capacidade de normalizar covariâncias, porém apresenta silhueta e ARI inferiores em cenários de baixa dimensionalidade ou com clusters não Gaussianos. A métrica Manhattan demonstra robustez a outliers, enquanto a Euclidiana oferece equilíbrio entre raio e qualidade em dados aproximadamente esféricos.
+
+\begin{table}[t]
+    \centering
+    \caption{Métricas de distância agregadas}
+    \label{tab:metrics}
+    \input{../results/summary/table_metric_comparison.tex}
+\end{table}
+
+\subsection{Largura do intervalo}
+A Tabela~\ref{tab:width} mostra o trade-off entre largura final do intervalo e métricas de desempenho. Reduzir a largura para 4\% garante o menor raio, mas quase dobra o tempo médio em relação a 25\%. A configuração de 18\% ofereceu silhuetas ligeiramente superiores sem grandes custos, tornando-se uma opção prática quando não é necessário o raio mais apertado possível.
+
+\begin{table}[t]
+    \centering
+    \caption{Efeito da largura final no algoritmo de refinamento}
+    \label{tab:width}
+    \input{../results/summary/table_interval_width.tex}
+\end{table}
+
+\subsection{Observações por família de dados}
+\begin{itemize}
+    \item \textbf{Bases anisotrópicas}: nas instâncias \texttt{synthetic/anisotropic/*}, Mahalanobis combinada ao refinamento atingiu ARI próximos de 1.0. Distâncias de Minkowski tiveram dificuldades quando centros estavam alinhados ao longo de eixos diferentes.
+    \item \textbf{Cenários não convexos}: em \texttt{synthetic/moons} e \texttt{synthetic/circles}, todas as métricas produziram silhuetas baixas (\(\approx 0.33\)), reforçando a limitação de abordagens baseadas em distâncias globais para topologias não convexas.
+    \item \textbf{Misturas gaussianas}: em \texttt{synthetic/gaussian\_mixture/*}, Mahalanobis manteve raios reduzidos, mas Minkowski com $p=1$ alcançou ARI superiores quando as variâncias dos clusters eram heterogêneas, pois a normalização global penaliza grupos dispersos.
+\end{itemize}
+
+\subsection{Figuras}
+A Figura~\ref{fig:silhouette} ilustra a média do índice de silhueta por algoritmo e métrica, gerada automaticamente pelo módulo de análise.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{silhouette_by_algorithm.png}
+    \caption{Silhueta média por algoritmo e métrica (valores agregados).}
+    \label{fig:silhouette}
+\end{figure}
+
+\section{Conclusões e Trabalhos Futuros}
+O estudo confirmou, na prática, as garantias teóricas dos algoritmos 2-aproximados para o problema dos $k$-centros. O \emph{farthest-first} é indicado quando o custo de pré-processamento domina o tempo total, enquanto o refinamento de intervalos fornece melhor equilíbrio entre raio e qualidade, especialmente quando combinado à distância de Mahalanobis. O K-Means continua competitivo em silhueta/ARI quando os clusters são aproximadamente esféricos, servindo como baseline robusto.
+
+Como trabalhos futuros, destacamos: (i) aplicar testes estatísticos não-paramétricos (ex.: Wilcoxon pareado) para fortalecer a comparação entre algoritmos \cite{readme}, (ii) explorar estruturas métricas (cover trees, índices de triângulo) para acelerar o cálculo de distâncias em bases com dezenas de milhares de instâncias e (iii) investigar métricas adaptativas, como Minkowski com $p$ selecionado automaticamente ou variantes baseadas em medianas (K-Medoids/K-Centers com \emph{coresets}).
+
+\section*{Agradecimentos}
+Os autores agradecem ao corpo docente da disciplina DCC207 e aos colegas de turma pelas discussões que motivaram diversas otimizações implementadas neste trabalho.
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}
+
