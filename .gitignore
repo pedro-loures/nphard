@@ -1,0 +1,37 @@
+# Virtual environments / tooling
+.venv/
+.env/
+.python-version
+
+# Python caches & build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+build/
+dist/
+
+# Experiment + dataset outputs
+data/
+results/
+report/results/
+report/*.pdf
+report/*.aux
+report/*.log
+report/*.bbl
+report/*.blg
+
+# Pipeline logs / flags
+pipeline*.log
+pipeline_*.flag
+
+# IDE & notebook cruft
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+
+

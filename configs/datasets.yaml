@@ -1,0 +1,25 @@
+uci_datasets:
+  # Each entry refers to an OpenML dataset id and a short name.
+  # All of them are numeric classification datasets with >= 700 instances.
+  - name: "adult"
+    openml_id: 1590
+  - name: "shuttle"
+    openml_id: 1461
+  - name: "magic"
+    openml_id: 1120
+  - name: "phoneme"
+    openml_id: 1489
+  - name: "satimage"
+    openml_id: 182
+  - name: "segment"
+    openml_id: 40984
+  - name: "page-blocks"
+    openml_id: 30
+  - name: "optdigits"
+    openml_id: 28
+  - name: "pen-digits"
+    openml_id: 32
+  - name: "vehicle"
+    openml_id: 54
+
+
