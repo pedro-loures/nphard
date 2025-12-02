@@ -1,7 +1,9 @@
 # TP2 — 2-Approximate $k$-Center Study
 
-Implementation of the DCC207/Algoritmos 2 practical work on approximation algorithms. The repository ships end-to-end tooling to:
 [ NOTA DO ESTUDANTE - O README FOI ESCRITO POR UM AGENTE DE PROGRAMAÇÃO APENAS PARA FACILITAR REPRODUÇÃO, FAVOR NÃO CONSIDERAR O README PARA O TRABALHO ] 
+
+Implementation of the DCC207/Algoritmos 2 practical work on approximation algorithms. The repository ships end-to-end tooling to:
+
 
 - implement Minkowski ($p \ge 1$) and Mahalanobis distances without using prebuilt distance helpers;
 - run the two 2-approximation $k$-center algorithms (farthest-first traversal and the interval-refinement variant with configurable final width);
@@ -147,5 +149,6 @@ Artifacts generated in `results/summary/`:
 ---
 
 For questions or clarifications, refer to `tp2.txt` (assignment brief) or contact the course staff.
+
 
 
